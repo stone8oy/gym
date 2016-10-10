@@ -5,9 +5,33 @@ class Error(Exception):
 
 # Local errors
 
-class UnregisteredEnv(Error):
+class Unregistered(Error):
+    """Raised when the user requests an item from the registry that does
+    not actually exist.
+    """
+    pass
+
+class UnregisteredEnv(Unregistered):
     """Raised when the user requests an env from the registry that does
     not actually exist.
+    """
+    pass
+
+class UnregisteredBenchmark(Unregistered):
+    """Raised when the user requests an env from the registry that does
+    not actually exist.
+    """
+    pass
+
+class DeprecatedEnv(Error):
+    """Raised when the user requests an env from the registry with an
+    older version number than the latest env with the same name.
+    """
+    pass
+
+class UnseedableEnv(Error):
+    """Raised when the user tries to seed an env that does not support
+    seeding.
     """
     pass
 
@@ -29,6 +53,12 @@ class ResetNeeded(Exception):
 class ResetNotAllowed(Exception):
     """When the monitor is active, raised when the user tries to step an
     environment that's not yet done.
+    """
+    pass
+
+class InvalidAction(Exception):
+    """Raised when the user performs an action not contained within the
+    action space
     """
     pass
 

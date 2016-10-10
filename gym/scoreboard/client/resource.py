@@ -1,7 +1,9 @@
 import json
-import urllib
 import warnings
 import sys
+from six import string_types
+from six import iteritems
+import six.moves.urllib as urllib
 
 import gym
 from gym import error
@@ -11,6 +13,7 @@ def convert_to_gym_object(resp, api_key):
     types = {
         'evaluation': Evaluation,
         'file': FileUpload,
+        'benchmark_run': BenchmarkRun,
     }
 
     if isinstance(resp, list):
@@ -18,7 +21,7 @@ def convert_to_gym_object(resp, api_key):
     elif isinstance(resp, dict) and not isinstance(resp, GymObject):
         resp = resp.copy()
         klass_name = resp.get('object')
-        if isinstance(klass_name, basestring):
+        if isinstance(klass_name, string_types):
             klass = types.get(klass_name, GymObject)
         else:
             klass = GymObject
@@ -142,7 +145,7 @@ class GymObject(dict):
 
         self._transient_values = self._transient_values - set(values)
 
-        for k, v in values.iteritems():
+        for k, v in iteritems(values):
             super(GymObject, self).__setitem__(
                 k, convert_to_gym_object(v, api_key))
 
@@ -164,10 +167,10 @@ class GymObject(dict):
     def __repr__(self):
         ident_parts = [type(self).__name__]
 
-        if isinstance(self.get('object'), basestring):
+        if isinstance(self.get('object'), string_types):
             ident_parts.append(self.get('object'))
 
-        if isinstance(self.get('id'), basestring):
+        if isinstance(self.get('id'), string_types):
             ident_parts.append('id=%s' % (self.get('id'),))
 
         unicode_repr = '<%s at %s> JSON: %s' % (
@@ -227,8 +230,8 @@ class APIResource(GymObject):
         if cls == APIResource:
             raise NotImplementedError(
                 'APIResource is an abstract class.  You should perform '
-                'actions on its subclasses (e.g. Charge, Customer)')
-        return str(urllib.quote_plus(cls.__name__.lower()))
+                'actions on its subclasses')
+        return str(urllib.parse.quote_plus(cls.__name__.lower()))
 
     @classmethod
     def class_path(cls):
@@ -243,7 +246,7 @@ class APIResource(GymObject):
                 'has invalid ID: %r' % (type(self).__name__, id), 'id')
         id = util.utf8(id)
         base = self.class_path()
-        extn = urllib.quote_plus(id)
+        extn = urllib.parse.quote_plus(id)
         return "%s/%s" % (base, extn)
 
 class ListObject(GymObject):
@@ -280,7 +283,7 @@ class ListObject(GymObject):
     def retrieve(self, id, **params):
         base = self.get('url')
         id = util.utf8(id)
-        extn = urllib.quote_plus(id)
+        extn = urllib.parse.quote_plus(id)
         url = "%s/%s" % (base, extn)
 
         return self.request('get', url, params)
@@ -376,3 +379,14 @@ class FileUpload(ListableAPIResource):
 class Evaluation(CreateableAPIResource):
     def web_url(self):
         return "%s/evaluations/%s" % (gym.scoreboard.web_base, self.get('id'))
+
+class Algorithm(CreateableAPIResource):
+    pass
+
+class BenchmarkRun(CreateableAPIResource, UpdateableAPIResource):
+    @classmethod
+    def class_name(cls):
+        return 'benchmark_run'
+
+    def commit(self):
+        return self.request('post', '{}/commit'.format(self.instance_path()))

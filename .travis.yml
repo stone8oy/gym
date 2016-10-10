@@ -1,32 +1,15 @@
-dist: trusty
 sudo: required
-cache:
-  apt: true
-  pip: false
 language: python
-python:
-  - "2.7"
-  # - "3.2"
-
-# Install numpy and scipy so we don't need to compile them
-addons:
-    apt:
-      packages:
-        - python-numpy
-        - python-matplotlib
-        - python-tk
-
+services:
+  - docker
 before_install:
-  - Xvfb :12 -screen 0 800x600x24 +extension RANDR &
-  - mkdir -p ~/.mujoco
-    # In a pull request, there are no secrets, and hence no MuJoCo:
-    # https://docs.travis-ci.com/user/pull-requests#Security-Restrictions-when-testing-Pull-Requests.
-  - '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && ( curl https://openai-public.s3-us-west-2.amazonaws.com/mujoco/$MUJOCO_KEY_BUNDLE.tar.gz | tar xz -C ~/.mujoco )'
-env:
-  - DISPLAY=:12
-
-install: pip install -r requirements.txt
-script: nose2
+  # Prime the cache. We currently manually keep this synced.
+  - docker pull quay.io/openai/gym:test
+  - docker build -f test.dockerfile -t quay.io/openai/gym:test .
+script:
+  # In a pull request, there are no secrets, and hence no MuJoCo:
+  # https://docs.travis-ci.com/user/pull-requests#Security-Restrictions-when-testing-Pull-Requests.
+  - docker run -e MUJOCO_KEY_BUNDLE="${MUJOCO_KEY_BUNDLE:-}" quay.io/openai/gym:test tox
 
 notifications:
   slack:

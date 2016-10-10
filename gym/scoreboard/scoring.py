@@ -16,17 +16,42 @@ def score_from_remote(url):
     parsed = result.json()
     episode_lengths = parsed['episode_lengths']
     episode_rewards = parsed['episode_rewards']
+    episode_types = parsed.get('episode_types')
     timestamps = parsed['timestamps']
     # Handle legacy entries where initial_reset_timestamp wasn't set
     initial_reset_timestamp = parsed.get('initial_reset_timestamp', timestamps[0])
     env_id = parsed['env_id']
 
     spec = gym.spec(env_id)
-    return score_from_merged(episode_lengths, episode_rewards, timestamps, initial_reset_timestamp, spec.trials, spec.reward_threshold)
+    return score_from_merged(episode_lengths, episode_rewards, episode_types, timestamps, initial_reset_timestamp, spec.trials, spec.reward_threshold)
 
-def score_from_merged(episode_lengths, episode_rewards, timestamps, initial_reset_timestamp, trials, reward_threshold):
-    """Method to calculate the score from merged monitor files.
+def score_from_local(directory):
+    """Calculate score from a local results directory"""
+    results = gym.monitoring.monitor.load_results(directory)
+    # No scores yet saved
+    if results is None:
+        return None
+
+    episode_lengths = results['episode_lengths']
+    episode_rewards = results['episode_rewards']
+    episode_types = results['episode_types']
+    timestamps = results['timestamps']
+    initial_reset_timestamp = results['initial_reset_timestamp']
+    spec = gym.spec(results['env_info']['env_id'])
+
+    return score_from_merged(episode_lengths, episode_rewards, episode_types, timestamps, initial_reset_timestamp, spec.trials, spec.reward_threshold)
+
+def score_from_merged(episode_lengths, episode_rewards, episode_types, timestamps, initial_reset_timestamp, trials, reward_threshold):
+    """Method to calculate the score from merged monitor files. Scores
+    only a single environment; mostly legacy.
     """
+    if episode_types is not None:
+        # Select only the training episodes
+        t_idx = np.where(e == 't' for e in episode_types)
+        episode_lengths = np.array(episode_lengths)[t_idx]
+        episode_rewards = np.array(episode_rewards)[t_idx]
+        timestamps = np.array(timestamps)[t_idx]
+
     # Make sure everything is a float -- no pesky ints.
     episode_rewards = np.array(episode_rewards, dtype='float64')
 
@@ -57,7 +82,10 @@ def score_from_merged(episode_lengths, episode_rewards, timestamps, initial_rese
         best_idx = np.argmax(means)
         best_rewards = episode_rewards[best_idx:best_idx+trials]
         mean = np.mean(best_rewards)
-        error = np.std(best_rewards) / (np.sqrt(trials) - 1)
+        if trials == 1: # avoid NaN
+            error = 0.
+        else:
+            error = np.std(best_rewards) / (np.sqrt(trials) - 1)
     return {
         'episode_t_value': episode_t_value,
         'timestep_t_value': timestep_t_value,
@@ -69,6 +97,12 @@ def score_from_merged(episode_lengths, episode_rewards, timestamps, initial_rese
         'seconds_in_total': seconds_in_total,
     }
 
+def benchmark_score_from_merged(benchmark, env_id, episode_lengths, episode_rewards, episode_types):
+    """Method to calculate an environment's benchmark score from merged
+    monitor files.
+    """
+    return benchmark.score(benchmark, env_id, episode_lengths, episode_rewards, episode_types)
+
 def running_mean(x, N):
     x = np.array(x, dtype='float64')
     cumsum = np.cumsum(np.insert(x, 0, 0))
@@ -77,9 +111,13 @@ def running_mean(x, N):
 def compute_graph_stats(episode_lengths, episode_rewards, timestamps, initial_reset_timestamp, buckets):
     """Method to compute the aggregates for the graphs."""
     # Not a dependency of OpenAI Gym generally.
-    import scipy
+    import scipy.stats
 
     num_episodes = len(episode_lengths)
+
+    # Catch for if no files written which causes error with scipy.stats.binned_statistic
+    if num_episodes == 0:
+        return None
 
     episode_rewards = np.array(episode_rewards)
     episode_lengths = np.array(episode_lengths)

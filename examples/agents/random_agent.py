@@ -1,5 +1,7 @@
+import argparse
 import logging
 import os
+import sys
 
 import gym
 
@@ -12,38 +14,54 @@ class RandomAgent(object):
         return self.action_space.sample()
 
 if __name__ == '__main__':
-    # You can optionally set up the logger. Also fine to set the level
-    # to logging.DEBUG or logging.WARN if you want to change the
-    # amount of outut.
+    parser = argparse.ArgumentParser(description=None)
+    parser.add_argument('env_id', nargs='?', default='CartPole-v0', help='Select the environment to run')
+    args = parser.parse_args()
+
+    # Call `undo_logger_setup` if you want to undo Gym's logger setup
+    # and configure things manually. (The default should be fine most
+    # of the time.)
+    gym.undo_logger_setup()
     logger = logging.getLogger()
+    formatter = logging.Formatter('[%(asctime)s] %(message)s')
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    # You can set the level to logging.DEBUG or logging.WARN if you
+    # want to change the amount of output.
     logger.setLevel(logging.INFO)
 
-    outdir = '/tmp/random-agent-results'
-    gym.upload(outdir, algorithm_id='random')
-    raise"hi"
-
-    env = gym.make('CartPole-v0')
-    agent = RandomAgent(env.action_space)
+    env = gym.make(args.env_id)
 
     # You provide the directory to write to (can be an existing
-    # directory, but can't contain previous monitor results. You can
-    # also dump to a tempdir if you'd like: tempfile.mkdtemp().
+    # directory, including one with existing data -- all monitor files
+    # will be namespaced). You can also dump to a tempdir if you'd
+    # like: tempfile.mkdtemp().
     outdir = '/tmp/random-agent-results'
-    env.monitor.start(outdir, force=True)
+    env.monitor.start(outdir, force=True, seed=0)
 
-    episode_count = 200
-    max_steps = 100
+    # This declaration must go *after* the monitor call, since the
+    # monitor's seeding creates a new action_space instance with the
+    # appropriate pseudorandom number generator.
+    agent = RandomAgent(env.action_space)
+
+    episode_count = 100
+    max_steps = 200
     reward = 0
     done = False
 
-    for i in xrange(episode_count):
+    for i in range(episode_count):
         ob = env.reset()
 
-        for j in xrange(max_steps):
+        for j in range(max_steps):
             action = agent.act(ob, reward, done)
             ob, reward, done, _ = env.step(action)
             if done:
                 break
+            # Note there's no env.render() here. But the environment still can open window and
+            # render if asked by env.monitor: it calls env.render('rgb_array') to record video.
+            # Video is not recorded every episode, see capped_cubic_video_schedule for details.
 
     # Dump result info to disk
     env.monitor.close()
@@ -51,4 +69,4 @@ if __name__ == '__main__':
     # Upload to the scoreboard. We could also do this from another
     # process if we wanted.
     logger.info("Successfully ran RandomAgent. Now trying to upload results to the scoreboard. If it breaks, you can always just try re-uploading the same results.")
-    gym.upload(outdir, algorithm_id='random')
+    gym.upload(outdir)

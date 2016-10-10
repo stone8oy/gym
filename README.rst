@@ -1,12 +1,24 @@
 gym
 ******
 
+.. image:: https://travis-ci.org/openai/gym.svg?branch=master
+    :target: https://travis-ci.org/openai/gym
+
 **OpenAI Gym is a toolkit for developing and comparing reinforcement learning algorithms.** This is the ``gym`` open-source library, which gives you access to an ever-growing variety of environments.
 
 ``gym`` makes no assumptions about the structure of your agent, and is compatible with any numerical computation library, such as TensorFlow or Theano. You can use it from Python code, and soon from other languages.
 
 If you're not sure where to start, we recommend beginning with the
 `docs <https://gym.openai.com/docs>`_ on our site.
+
+A whitepaper for OpenAI Gym is available at http://arxiv.org/abs/1606.01540, and here's a BibTeX entry that you can use to cite it in a publication::
+
+	@misc{1606.01540,
+		Author = {Greg Brockman and Vicki Cheung and Ludwig Pettersson and Jonas Schneider and John Schulman and Jie Tang and Wojciech Zaremba},
+		Title = {OpenAI Gym},
+		Year = {2016},
+		Eprint = {arXiv:1606.01540},
+	}
 
 .. contents:: **Contents of this document**
    :depth: 2
@@ -27,7 +39,7 @@ that part is left to you. The following are the ``Env`` methods you
 should know:
 
 - `reset(self)`: Reset the environment's state. Returns `observation`.
-- `step(self, action)`: Step the environment by one timestep. Returns `observation`, `action`, `reward`, `done`.
+- `step(self, action)`: Step the environment by one timestep. Returns `observation`, `reward`, `done`, `info`.
 - `render(self, mode='human', close=False)`: Render one frame of the environment. The default mode will do something human friendly, such as pop up a window. Passing the `close` flag signals the renderer to close any such windows.
 
 Installation
@@ -36,7 +48,7 @@ Installation
 You can perform a minimal install of ``gym`` with:
 
 .. code:: shell
-	  
+
 	  git clone https://github.com/openai/gym.git
 	  cd gym
 	  pip install -e .
@@ -59,47 +71,65 @@ installing the dependencies for the remaining environments.
 Installing everything
 ---------------------
 
-Once you're ready to install everything, run ``pip install -e .[all]`` (or ``pip install gym[all]``).
-
-MuJoCo has a proprietary dependency we can't set up for you. Follow
-the
-`instructions <https://github.com/openai/mujoco-py#obtaining-the-binaries-and-license-key>`_
-in the ``mujoco-py`` package for help.
-
-For the install to succeed, you'll need to have some system packages
-installed. We'll build out the list here over time; please let us know
+To install the full set of environments, you'll need to have some system
+packages installed. We'll build out the list here over time; please let us know
 what you end up installing on your platform.
 
 On OSX:
 
 .. code:: shell
 
-	  brew install cmake
+	  brew install cmake boost boost-python sdl2 swig wget
 
 On Ubuntu 14.04:
 
 .. code:: shell
-	  
-	  apt-get install -y python-numpy python-dev cmake zlib1g-dev libjpeg-dev xvfb libav-tools xorg-dev python-opengl
+
+	  apt-get install -y python-numpy python-dev cmake zlib1g-dev libjpeg-dev xvfb libav-tools xorg-dev python-opengl libboost-all-dev libsdl2-dev swig
+
+MuJoCo has a proprietary dependency we can't set up for you. Follow
+the
+`instructions <https://github.com/openai/mujoco-py#obtaining-the-binaries-and-license-key>`_
+in the ``mujoco-py`` package for help.
+
+Once you're ready to install everything, run ``pip install -e '.[all]'`` (or ``pip install 'gym[all]'``).
 
 Supported systems
 -----------------
 
-We currenty support Python 2.7 on Linux and OSX.
+We currently support Linux and OS X running Python 2.7 or 3.5.
+Python 3 support should still be considered experimental -- if you find any bugs, please report them!
 
-We will expand support to Python 3 and Windows based on demand. We
-will also soon ship a Docker container exposing OpenAI Gym as an API
-callable from any platform.
+In particular on OSX + Python3 you may need to run
+
+.. code:: shell
+
+	  brew install boost-python --with-python3
+
+We will expand support to Windows based on demand. We
+will also soon ship a Docker container exposing the environments
+callable from any platform, for use with any non-Python framework, such as Torch.
 
 Pip version
 -----------
 
-To run ``pip install -e .[all]``, you'll need a semi-recent pip.
+To run ``pip install -e '.[all]'``, you'll need a semi-recent pip.
 Please make sure your pip is at least at version ``1.5.0``. You can
 upgrade using the following: ``pip install --ignore-installed
 pip``. Alternatively, you can open `setup.py
 <https://github.com/openai/gym/blob/master/setup.py>`_ and
 install the dependencies by hand.
+
+Rendering on a server
+---------------------
+
+If you're trying to render video on a server, you'll need to connect a
+fake display. The easiest way to do this is by running under
+``xvfb-run`` (on Ubuntu, install the ``xvfb`` package):
+
+.. code:: shell
+
+     xvfb-run -s "-screen 0 1400x900x24" bash
 
 Installing dependencies for specific environments
 -------------------------------------------------
@@ -135,7 +165,7 @@ sequence.
 Atari
 -----
 
-The Atari environments are a variety of Atari video games. If you didn't do the full install, you can install dependencies via ``pip install -e .[atari]`` (you'll need ``cmake`` installed) and then get started as follow:
+The Atari environments are a variety of Atari video games. If you didn't do the full install, you can install dependencies via ``pip install -e '.[atari]'`` (you'll need ``cmake`` installed) and then get started as follow:
 
 .. code:: python
 
@@ -149,7 +179,7 @@ This will install ``atari-py``, which automatically compiles the `Arcade Learnin
 Board games
 -----------
 
-The board game environments are a variety of board games. If you didn't do the full install, you can install dependencies via ``pip install -e .[board_game]`` (you'll need ``cmake`` installed) and then get started as follow:
+The board game environments are a variety of board games. If you didn't do the full install, you can install dependencies via ``pip install -e '.[board_game]'`` (you'll need ``cmake`` installed) and then get started as follow:
 
 .. code:: python
 
@@ -158,10 +188,22 @@ The board game environments are a variety of board games. If you didn't do the f
 	  env.reset()
 	  env.render()
 
+Box2d
+-----------
+
+Box2d is a 2D physics engine. You can install it via  ``pip install -e '.[box2d]'`` and then get started as follow:
+
+.. code:: python
+
+	  import gym
+	  env = gym.make('LunarLander-v2')
+	  env.reset()
+	  env.render()
+
 Classic control
 ---------------
 
-These are a variety of classic control tasks, which would appear in a typical reinforcement learning textbook. If you didn't do the full install, you will need to run ``pip install -e .[classic_control]`` to enable rendering. You can get started with them via:
+These are a variety of classic control tasks, which would appear in a typical reinforcement learning textbook. If you didn't do the full install, you will need to run ``pip install -e '.[classic_control]'`` to enable rendering. You can get started with them via:
 
 .. code:: python
 
@@ -177,12 +219,12 @@ MuJoCo
 very detailed efficient simulations with contacts. It's not
 open-source, so you'll have to follow the instructions in `mujoco-py
 <https://github.com/openai/mujoco-py#obtaining-the-binaries-and-license-key>`_
-to set it up. You'll have to also run ``pip install -e .[mujoco]`` if you didn't do the full install.
+to set it up. You'll have to also run ``pip install -e '.[mujoco]'`` if you didn't do the full install.
 
 .. code:: python
 
 	  import gym
-	  env = gym.make('Humanoid')
+	  env = gym.make('Humanoid-v0')
 	  env.reset()
 	  env.render()
 
@@ -218,3 +260,16 @@ We are using `nose2 <https://github.com/nose-devs/nose2>`_ for tests. You can ru
 	  nose2
 
 You can also run tests in a specific directory by using the ``-s`` option, or by passing in the specific name of the test. See the `nose2 docs <http://nose2.readthedocs.org/en/latest/usage.html#naming-tests>`_ for more details.
+
+What's new
+----------
+
+- 2016-09-21: Switch the Gym automated logger setup to configure the
+  root logger rather than just the 'gym' logger.
+- 2016-08-17: Calling `close` on an env will also close the monitor
+  and any rendering windows.
+- 2016-08-17: The monitor will no longer write manifest files in
+  real-time, unless `write_upon_reset=True` is passed.
+- 2016-05-28: For controlled reproducibility, envs now support seeding
+  (cf #91 and #135). The monitor records which seeds are used. We will
+  soon add seed information to the display on the scoreboard.

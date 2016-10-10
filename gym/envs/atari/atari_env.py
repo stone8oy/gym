@@ -3,20 +3,15 @@ import os
 import gym
 from gym import error, spaces
 from gym import utils
+from gym.utils import seeding
 
 try:
     import atari_py
-except ImportError:
-    raise error.DependencyNotInstalled("{}. (HINT: you can install Atari dependencies with 'pip install gym[atari]'.)")
+except ImportError as e:
+    raise error.DependencyNotInstalled("{}. (HINT: you can install Atari dependencies by running 'pip install gym[atari]'.)".format(e))
 
 import logging
 logger = logging.getLogger(__name__)
-
-def to_rgb(ale):
-    (screen_width,screen_height) = ale.getScreenDims()
-    arr = np.zeros((screen_height, screen_width, 4), dtype=np.uint8)
-    ale.getScreenRGB(arr) # says rgb but actually bgr
-    return arr[:,:,[2, 1, 0]].copy()
 
 def to_ram(ale):
     ram_size = ale.getRAMSize()
@@ -27,21 +22,35 @@ def to_ram(ale):
 class AtariEnv(gym.Env, utils.EzPickle):
     metadata = {'render.modes': ['human', 'rgb_array']}
 
-    def __init__(self, game='pong', obs_type='ram'):
+    def __init__(self, game='pong', obs_type='ram', frameskip=(2, 5), repeat_action_probability=0.):
+        """Frameskip should be either a tuple (indicating a random range to
+        choose from, with the top value exclude), or an int."""
+
         utils.EzPickle.__init__(self, game, obs_type)
         assert obs_type in ('ram', 'image')
-        game_path = atari_py.get_game_path(game)
-        if not os.path.exists(game_path):
-            raise IOError('You asked for game %s but path %s does not exist'%(game, game_path))
-        self.ale = atari_py.ALEInterface()
-        self.ale.loadROM(game_path)
+
+        self.game_path = atari_py.get_game_path(game)
+        if not os.path.exists(self.game_path):
+            raise IOError('You asked for game %s but path %s does not exist'%(game, self.game_path))
         self._obs_type = obs_type
-        self._action_set = self.ale.getMinimalActionSet()
+        self.frameskip = frameskip
+        self.ale = atari_py.ALEInterface()
         self.viewer = None
 
-        (screen_width,screen_height) = self.ale.getScreenDims()
+        # Tune (or disable) ALE's action repeat:
+        # https://github.com/openai/gym/issues/349
+        assert isinstance(repeat_action_probability, (float, int)), "Invalid repeat_action_probability: {!r}".format(repeat_action_probability)
+        self.ale.setFloat('repeat_action_probability'.encode('utf-8'), repeat_action_probability)
 
+        self._seed()
+
+        (screen_width, screen_height) = self.ale.getScreenDims()
+        self._buffer = np.empty((screen_height, screen_width, 4), dtype=np.uint8)
+
+        self._action_set = self.ale.getMinimalActionSet()
         self.action_space = spaces.Discrete(len(self._action_set))
+
+        (screen_width,screen_height) = self.ale.getScreenDims()
         if self._obs_type == 'ram':
             self.observation_space = spaces.Box(low=np.zeros(128), high=np.zeros(128)+255)
         elif self._obs_type == 'image':
@@ -49,18 +58,35 @@ class AtariEnv(gym.Env, utils.EzPickle):
         else:
             raise error.Error('Unrecognized observation type: {}'.format(self._obs_type))
 
+    def _seed(self, seed=None):
+        self.np_random, seed1 = seeding.np_random(seed)
+        # Derive a random seed. This gets passed as a uint, but gets
+        # checked as an int elsewhere, so we need to keep it below
+        # 2**31.
+        seed2 = seeding.hash_seed(seed1 + 1) % 2**31
+        # Empirically, we need to seed before loading the ROM.
+        self.ale.setInt(b'random_seed', seed2)
+        self.ale.loadROM(self.game_path)
+        return [seed1, seed2]
+
     def _step(self, a):
         reward = 0.0
         action = self._action_set[a]
-        num_steps = np.random.randint(2, 5)
-        for _ in xrange(num_steps):
+
+        if isinstance(self.frameskip, int):
+            num_steps = self.frameskip
+        else:
+            num_steps = self.np_random.randint(self.frameskip[0], self.frameskip[1])
+        for _ in range(num_steps):
             reward += self.ale.act(action)
         ob = self._get_obs()
 
         return ob, reward, self.ale.game_over(), {}
 
     def _get_image(self):
-        return to_rgb(self.ale)
+        self.ale.getScreenRGB(self._buffer)  # says rgb but actually bgr
+        return self._buffer[:, :, [2, 1, 0]]
+
     def _get_ram(self):
         return to_ram(self.ale)
 
@@ -80,23 +106,35 @@ class AtariEnv(gym.Env, utils.EzPickle):
         self.ale.reset_game()
         return self._get_obs()
 
-    def _render(self, mode='human', close=False):        
+    def _render(self, mode='human', close=False):
         if close:
             if self.viewer is not None:
                 self.viewer.close()
+                self.viewer = None
             return
         img = self._get_image()
         if mode == 'rgb_array':
             return img
-        elif mode is 'human':
+        elif mode == 'human':
             from gym.envs.classic_control import rendering
             if self.viewer is None:
                 self.viewer = rendering.SimpleImageViewer()
             self.viewer.imshow(img)
-    
+
     def get_action_meanings(self):
         return [ACTION_MEANING[i] for i in self._action_set]
 
+    # def save_state(self):
+    #     return self.ale.saveState()
+
+    # def load_state(self):
+    #     return self.ale.loadState()
+
+    # def clone_state(self):
+    #     return self.ale.cloneState()
+
+    # def restore_state(self, state):
+    #     return self.ale.restoreState(state)
 
 
 ACTION_MEANING = {
